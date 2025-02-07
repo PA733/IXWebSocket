@@ -315,7 +315,12 @@ namespace ix
 #endif
                                                std::string& errMsg)
     {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
         X509* server_cert = SSL_get_peer_certificate(ssl);
+#else
+        const X509* server_cert = SSL_get0_peer_certificate(ssl);
+#endif
+
         if (server_cert == nullptr)
         {
             errMsg = "OpenSSL failed - peer didn't present a X509 certificate.";
@@ -343,19 +348,18 @@ namespace ix
                     }
                 }
             }
+            sk_GENERAL_NAME_pop_free(san_names, GENERAL_NAME_free);
         }
-        sk_GENERAL_NAME_pop_free(san_names, GENERAL_NAME_free);
 
         if (!hostname_verifies_ok)
         {
             int cn_pos = X509_NAME_get_index_by_NID(
-                X509_get_subject_name((X509*) server_cert), NID_commonName, -1);
+                X509_get_subject_name(server_cert), NID_commonName, -1);
             if (cn_pos >= 0)
             {
                 X509_NAME_ENTRY* cn_entry =
-                    X509_NAME_get_entry(X509_get_subject_name((X509*) server_cert), cn_pos);
-
-                if (cn_entry != nullptr)
+                    X509_NAME_get_entry(X509_get_subject_name(server_cert), cn_pos);
+                if (cn_entry)
                 {
                     ASN1_STRING* cn_asn1 = X509_NAME_ENTRY_get_data(cn_entry);
                     char* cn = (char*) ASN1_STRING_data(cn_asn1);
@@ -367,16 +371,18 @@ namespace ix
                     }
                 }
             }
-        }
 
-        if (!hostname_verifies_ok)
-        {
-            errMsg = "OpenSSL failed - certificate was issued for a different domain.";
-            return false;
+            if (!hostname_verifies_ok)
+            {
+                errMsg = "OpenSSL failed - certificate was issued for a different domain.";
+                X509_free(server_cert);
+                return false;
+            }
         }
+        // 释放通过 SSL_get_peer_certificate 获得的证书
+        X509_free(server_cert);
 #endif
 
-        X509_free(server_cert);
         return true;
     }
 
