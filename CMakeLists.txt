@@ -207,6 +207,7 @@ if (USE_TLS)
 
     # This OPENSSL_FOUND check is to help find a cmake manually configured OpenSSL
     if (NOT OPENSSL_FOUND)
+      set(OPENSSL_USE_STATIC_LIBS TRUE)
       find_package(OpenSSL REQUIRED)
     endif()
     message(STATUS "OpenSSL: " ${OPENSSL_VERSION})
